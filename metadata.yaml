@@ -1,11 +1,12 @@
 name: astrbot_plugin_phira_mp
 display_name: Phira 多人服务器助手
-short_desc: 用 /p 指令查询和管理 Phira 多人服务器
+short_desc: 用 /p 指令查询、管理 Phira 服务器并绑定账号
 desc: |
-  将 phira-mp-node（Phira 多人服务器）的房间查询、服务器状态、建房、删房、管理消息与公告接入 AstrBot。
+  将 phira-mp-node（Phira 多人服务器）的房间查询、服务器状态、建房、删房、管理消息、公告与建房开关接入 AstrBot。
   指令统一以 /p 开头，支持 /p房间 和 /p 房间 两种写法。
-  服务端需要启用 HTTP API，并在插件中配置 API 地址、访问令牌和管理员 QQ。
-version: 1.0.0
+  支持 QQ 绑定 Phira 账号：通过服务端生成的一次性登录链接完成绑定，可查询绑定信息和解绑。
+  服务端需要启用 HTTP API 和账号绑定，并在插件中配置 API 地址、访问令牌和管理员 QQ。
+version: 1.1.0
 author: lisongyun857
 repo: https://github.com/lisongyun857/astrbot_plugin_phira_mp
 astrbot_version: ">=4.0.0"

@@ -1,6 +1,6 @@
 # Phira 多人服务器助手
 
-AstrBot 插件，将 [phira-mp-node](https://github.com/lisongyun857/phira-mp-node) 的房间查询、服务器状态、建房、删房、管理消息和公告接入 QQ，统一使用 `/p` 指令。
+AstrBot 插件，将 [phira-mp-node](https://github.com/lisongyun857/phira-mp-node) 的房间查询、服务器状态、建房、删房、管理消息和公告接入 QQ，支持 QQ 绑定 Phira 账号，统一使用 `/p` 指令。
 
 ## 功能
 
@@ -9,6 +9,8 @@ AstrBot 插件，将 [phira-mp-node](https://github.com/lisongyun857/phira-mp-no
 - 管理员创建/解散房间
 - 管理员向指定房间或全部房间发送管理消息
 - 管理员向所有在线玩家发送公告
+- 管理员禁止/允许玩家在客户端创建房间
+- QQ 绑定 Phira 账号：生成一次性登录链接、查询绑定、确认后解绑
 - 支持 `/p房间` 和 `/p 房间` 两种写法
 
 ## 前置条件
@@ -22,11 +24,17 @@ api:
   host: "127.0.0.1"
   port: 3052
   access_token: ""
+
+login:
+  enabled: true
+  public_url: "https://phira.lisongyun.top"
 ```
 
 3. AstrBot 已配置 NapCat / aiocqhttp 适配器。
 
 > AstrBot 与 phiraserver 不在同一台机器时，把 `api.host` 改为 `0.0.0.0`，设置 `access_token`，并在插件中填写对应的 API 地址和令牌。
+>
+> 账号绑定需要把 `login.public_url` 下的 `/login/` 反向代理到 phiraserver 的 `/login/`，例如 `https://phira.lisongyun.top/login/` → `http://127.0.0.1:3052/login/`。
 
 ## 安装
 
@@ -43,18 +51,22 @@ api:
 | `admin_ids` | 管理员 QQ 号列表 | 空 |
 | `timeout` | 请求超时（秒） | `5` |
 
-只有 `admin_ids` 中的 QQ 可以创建/删除房间、发送管理消息和公告。
+只有 `admin_ids` 中的 QQ 可以创建/删除房间、切换建房开关、发送管理消息和公告。账号绑定对所有人生效，不需要管理员。
 
 ## 指令
 
 | 指令 | 说明 | 权限 |
 | --- | --- | --- |
+| `/p登录` | 绑定 Phira 账号；已绑定则显示账号信息 | 所有人 |
+| `/p我的` | 查看当前绑定的 Phira 账号 | 所有人 |
+| `/p解绑` | 解除绑定，需在 60 秒内回复「确认」 | 所有人 |
 | `/p房间` | 查看在线房间 | 所有人 |
 | `/p房间 全部` | 查看全部房间（含隐藏） | 管理员 |
 | `/p状态` | 查看服务器状态 | 所有人 |
 | `/p创建房间 <房间ID>` | 创建房间 | 管理员 |
 | `/p删除房间 <房间ID>` | 解散并删除房间 | 管理员 |
 | `/p管理消息 <房间ID\|all> <内容>` | 向房间发送管理消息 | 管理员 |
+| `/p建房开关 开\|关` | 允许/禁止玩家在客户端创建房间 | 管理员 |
 | `/p公告 <内容>` | 向所有在线玩家发送公告 | 管理员 |
 | `/p帮助` | 显示帮助 | 所有人 |
 
@@ -65,12 +77,16 @@ api:
 插件调用 phiraserver 的以下接口，设置 `access_token` 后需携带 `Authorization: Bearer <token>`：
 
 ```text
-GET  /api/status
-GET  /api/rooms?all=1
-POST /api/rooms/create   {"id": "room1"}
-POST /api/rooms/delete   {"id": "room1"}
-POST /api/say            {"target": "room1|all", "content": "内容"}
-POST /api/announce       {"content": "内容"}
+GET    /api/status
+POST   /api/room-creation      {"enabled": false}
+GET    /api/rooms?all=1
+POST   /api/rooms/create       {"id": "room1"}
+POST   /api/rooms/delete       {"id": "room1"}
+POST   /api/say                {"target": "room1|all", "content": "内容"}
+POST   /api/announce           {"content": "内容"}
+POST   /api/login/link         {"platform": "qq", "userId": "123456789"}
+GET    /api/login/binding?platform=qq&userId=123456789
+DELETE /api/login/binding      {"platform": "qq", "userId": "123456789"}
 ```
 
 ## 常见问题
@@ -82,6 +98,14 @@ POST /api/announce       {"content": "内容"}
 **权限不足**
 
 把操作者的 QQ 号加入插件配置 `admin_ids`，保存后重载插件。
+
+**/p登录 提示生成登录链接失败**
+
+检查服务端 `login.enabled` 是否为 `true`、`login.public_url` 是否配置，以及反向代理是否把 `/login/` 转发到了 phiraserver。
+
+**登录链接打不开**
+
+确认 `login.public_url` 是公网可访问的 HTTPS 地址，并且反向代理指向 `http://127.0.0.1:3052/login/`。链接默认 10 分钟有效，过期后重新发送 `/p登录`。
 
 **启动 phiraserver 时报 EADDRINUSE**
 
