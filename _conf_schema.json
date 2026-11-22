@@ -1,0 +1,26 @@
+{
+  "api_base": {
+    "description": "Phira 服务器 HTTP API 地址",
+    "type": "string",
+    "hint": "例如 http://127.0.0.1:3052，需要与 phiraserver 的 api 配置一致",
+    "default": "http://127.0.0.1:3052"
+  },
+  "api_token": {
+    "description": "HTTP API 访问令牌",
+    "type": "string",
+    "hint": "与 phiraserver 的 api.access_token 一致；留空表示不校验",
+    "default": "",
+    "secret": true
+  },
+  "admin_ids": {
+    "description": "管理员 QQ 号",
+    "type": "list",
+    "hint": "只有这些 QQ 号可以创建/删除房间、发送管理消息和公告",
+    "default": []
+  },
+  "timeout": {
+    "description": "请求超时（秒）",
+    "type": "int",
+    "default": 5
+  }
+}
