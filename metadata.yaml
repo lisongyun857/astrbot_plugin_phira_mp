@@ -5,6 +5,7 @@ desc: |
   将 phira-mp-node（Phira 多人服务器）的房间查询、服务器状态、建房、删房、管理消息与公告接入 AstrBot。
   指令统一以 /p 开头，支持 /p房间 和 /p 房间 两种写法。
   服务端需要启用 HTTP API，并在插件中配置 API 地址、访问令牌和管理员 QQ。
+  使用这个服务端:https://github.com/lisongyun857/phira-mp-node/
 version: 1.0.0
 author: lisongyun857
 repo: https://github.com/lisongyun857/astrbot_plugin_phira_mp
