@@ -1,3 +1,5 @@
+# 前提
+使用这个服务端：https://github.com/lisongyun857/phira-mp-node/
 # Phira 多人服务器助手
 
 AstrBot 插件，将 [phira-mp-node](https://github.com/lisongyun857/phira-mp-node) 的房间查询、服务器状态、建房、删房、管理消息和公告接入 QQ，统一使用 `/p` 指令。
