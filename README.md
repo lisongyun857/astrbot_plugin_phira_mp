@@ -2,7 +2,7 @@
 
 > 使用这个服务端：[phira-mp-node](https://github.com/lisongyun857/phira-mp-node)
 
-AstrBot 插件，将 [phira-mp-node](https://github.com/lisongyun857/phira-mp-node) 的房间查询、服务器状态、建房、删房、管理消息和公告接入 QQ，支持 QQ 绑定 Phira 账号，统一使用 `/p` 指令。
+AstrBot 插件，将 [phira-mp-node](https://github.com/lisongyun857/phira-mp-node) 的房间查询、服务器状态、建房、删房、管理消息和公告接入 QQ，支持 QQ 绑定 Phira 账号，并可在 QQ 内以房主身份控制自己创建的房间，统一使用 `/p` 指令。
 
 ## 功能
 
@@ -13,6 +13,8 @@ AstrBot 插件，将 [phira-mp-node](https://github.com/lisongyun857/phira-mp-no
 - 管理员向所有在线玩家发送公告
 - 管理员禁止/允许玩家在客户端创建房间
 - QQ 绑定 Phira 账号：生成一次性登录链接、查询绑定、确认后解绑
+- 绑定后查看自己房间的成员与状态，并以房主身份：锁定/解锁、切换轮换、选谱、开始游戏、准备/取消准备、中止游戏、踢人、转让房主、解散房间
+- 管理员可对任意房间执行房主操作
 - 支持 `/p房间` 和 `/p 房间` 两种写法
 
 ## 前置条件
@@ -26,6 +28,9 @@ api:
   host: "127.0.0.1"
   port: 3052
   access_token: ""
+  # 默认全部接口公开；如需保护敏感接口，把 access_token 和 protected_paths 一起配置
+  protected_paths: []
+  public_paths: []
 
 login:
   enabled: true
@@ -34,7 +39,7 @@ login:
 
 3. AstrBot 已配置 NapCat / aiocqhttp 适配器。
 
-> AstrBot 与 phiraserver 不在同一台机器时，把 `api.host` 改为 `0.0.0.0`，设置 `access_token`，并在插件中填写对应的 API 地址和令牌。
+> AstrBot 与 phiraserver 不在同一台机器时，把 `api.host` 改为 `0.0.0.0`，设置 `access_token`，并在 `protected_paths` 中列出需要保护的接口，同时在插件中填写对应的 API 地址和令牌。
 >
 > 账号绑定需要把 `login.public_url` 下的 `/login/` 反向代理到 phiraserver 的 `/login/`，例如 `https://phira.lisongyun.top/login/` → `http://127.0.0.1:3052/login/`。
 
@@ -65,6 +70,16 @@ login:
 | `/p房间` | 查看在线房间 | 所有人 |
 | `/p房间 全部` | 查看全部房间（含隐藏） | 管理员 |
 | `/p状态` | 查看服务器状态 | 所有人 |
+| `/p房间信息` | 查看自己所在房间的成员、谱面、阶段和锁定状态 | 绑定用户 |
+| `/p锁定` / `/p解锁` | 锁定/解锁自己的房间 | 房主 |
+| `/p轮换 开\|关` | 切换房间轮换模式 | 房主 |
+| `/p选谱 <谱面ID>` | 选择谱面 | 房主 |
+| `/p开始` | 开始游戏 | 房主 |
+| `/p准备` / `/p取消准备` | 准备 / 取消准备 | 房内成员 |
+| `/p中止` | 中止当前游戏 | 房内成员 |
+| `/p踢人 <玩家ID或昵称>` | 踢出房间成员 | 房主 |
+| `/p转让房主 <玩家ID或昵称>` | 把房主转让给其他玩家 | 房主 |
+| `/p解散 [房间ID]` | 解散自己的房间；管理员可指定任意房间 | 房主 / 管理员 |
 | `/p创建房间 <房间ID>` | 创建房间 | 管理员 |
 | `/p删除房间 <房间ID>` | 解散并删除房间 | 管理员 |
 | `/p管理消息 <房间ID\|all> <内容>` | 向房间发送管理消息 | 管理员 |
@@ -74,9 +89,11 @@ login:
 
 房间 ID 只能包含字母、数字、`-`、`_`，长度 1~20；以 `_` 开头的房间为隐藏房间。
 
+房间控制指令需要先 `/p登录` 绑定 Phira 账号，并保证该账号正在游戏服务器中、且人在目标房间内。房主操作会由服务端再次校验房主身份；管理员 QQ 可对任意房间执行锁定、踢人、转让和开除等管理操作。
+
 ## 服务端 API
 
-插件调用 phiraserver 的以下接口，设置 `access_token` 后需携带 `Authorization: Bearer <token>`：
+插件调用 phiraserver 的以下接口；服务端默认所有接口公开，只有配置在 `api.protected_paths` 中的接口需要携带 `Authorization: Bearer <token>`：
 
 ```text
 GET    /api/status
@@ -89,6 +106,7 @@ POST   /api/announce           {"content": "内容"}
 POST   /api/login/link         {"platform": "qq", "userId": "123456789"}
 GET    /api/login/binding?platform=qq&userId=123456789
 DELETE /api/login/binding      {"platform": "qq", "userId": "123456789"}
+POST   /api/room/action        {"platform": "qq", "userId": "123456789", "action": "info|lock|cycle|select-chart|start|ready|cancel-ready|abort|kick|set-host|dissolve", ...}
 ```
 
 ## 常见问题

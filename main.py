@@ -17,6 +17,16 @@ HELP_TEXT = """Phira 多人服务器指令（/p + 子指令）：
 /p解绑                      解除绑定（需回复「确认」）
 /p房间                      查看在线房间
 /p房间 全部                 查看全部房间（含隐藏，管理员）
+/p房间信息                  查看自己所在房间的成员与状态
+/p锁定 /p解锁               锁定 / 解锁自己的房间（房主）
+/p轮换 开|关                切换房间轮换模式（房主）
+/p选谱 <谱面ID>             选择谱面（房主）
+/p开始                      开始游戏（房主）
+/p准备 /p取消准备           准备 / 取消准备
+/p中止                      中止当前游戏
+/p踢人 <玩家ID或昵称>        踢出房间成员（房主）
+/p转让房主 <玩家ID或昵称>     把房主转让给其他玩家（房主）
+/p解散 [房间ID]             解散自己的房间；管理员可指定房间
 /p创建房间 <房间ID>          创建房间（管理员）
 /p删除房间 <房间ID>          解散并删除房间（管理员）
 /p管理消息 <房间ID|all> <内容>  发送管理消息（管理员）
@@ -38,6 +48,22 @@ COMMAND_ALIASES = {
     "p房间",
     "p列表",
     "p状态",
+    "p房间信息",
+    "p我的房间",
+    "p信息",
+    "p锁定",
+    "p解锁",
+    "p锁房",
+    "p轮换",
+    "p选谱",
+    "p开始",
+    "p准备",
+    "p取消准备",
+    "p中止",
+    "p踢人",
+    "p转让房主",
+    "p给房主",
+    "p解散",
     "p创建房间",
     "p建房",
     "p删除房间",
@@ -55,14 +81,26 @@ COMMAND_ALIASES = {
     "pdelete",
     "psay",
     "pannounce",
+    "proominfo",
+    "plock",
+    "punlock",
+    "pcycle",
+    "pselect",
+    "pstart",
+    "pready",
+    "punready",
+    "pabort",
+    "pkick",
+    "ptransfer",
+    "pdissolve",
 }
 
 
 @register(
     PLUGIN_NAME,
     "lisongyun857",
-    "查询和管理 Phira 多人服务器，并支持 QQ 绑定 Phira 账号，使用 /p 指令。",
-    "1.1.0",
+    "查询和管理 Phira 多人服务器，支持 QQ 绑定账号并在 QQ 内控制自己创建的房间，使用 /p 指令。",
+    "1.2.0",
     "https://github.com/lisongyun857/astrbot_plugin_phira_mp",
 )
 class PhiraMpPlugin(Star):
@@ -151,6 +189,66 @@ class PhiraMpPlugin(Star):
             rooms = (response.get("data") or {}).get("rooms") or []
             return self._format_rooms(rooms)
 
+        if sub in ("房间信息", "我的房间", "信息", "roominfo", "myroom"):
+            return await self._room_action(sender_id, is_admin, "info")
+
+        if sub in ("锁定", "锁房", "lock"):
+            return await self._room_action(sender_id, is_admin, "lock", {"locked": True})
+
+        if sub in ("解锁", "unlock"):
+            return await self._room_action(sender_id, is_admin, "lock", {"locked": False})
+
+        if sub in ("轮换", "cycle"):
+            value = rest.strip().lower()
+            if value in ("开", "on", "enable", "enabled", "true", "开启", "允许"):
+                return await self._room_action(sender_id, is_admin, "cycle", {"enabled": True})
+            if value in ("关", "off", "disable", "disabled", "false", "关闭", "禁止"):
+                return await self._room_action(sender_id, is_admin, "cycle", {"enabled": False})
+            return "用法：/p轮换 开|关"
+
+        if sub in ("选谱", "select"):
+            chart_raw = rest.strip()
+            if not chart_raw:
+                return "用法：/p选谱 <谱面ID>"
+            try:
+                chart_id = int(chart_raw)
+            except ValueError:
+                return "谱面 ID 必须是整数"
+            return await self._room_action(
+                sender_id, is_admin, "select-chart", {"chartId": chart_id}
+            )
+
+        if sub in ("开始", "start"):
+            return await self._room_action(sender_id, is_admin, "start")
+
+        if sub in ("准备", "ready"):
+            return await self._room_action(sender_id, is_admin, "ready")
+
+        if sub in ("取消准备", "unready", "cancelready"):
+            return await self._room_action(sender_id, is_admin, "cancel-ready")
+
+        if sub in ("中止", "abort"):
+            return await self._room_action(sender_id, is_admin, "abort")
+
+        if sub in ("踢人", "kick"):
+            target = self._target_payload(rest)
+            if not target:
+                return "用法：/p踢人 <玩家ID或昵称>"
+            return await self._room_action(sender_id, is_admin, "kick", target)
+
+        if sub in ("转让房主", "给房主", "transfer", "transferhost"):
+            target = self._target_payload(rest)
+            if not target:
+                return "用法：/p转让房主 <玩家ID或昵称>"
+            return await self._room_action(sender_id, is_admin, "set-host", target)
+
+        if sub in ("解散", "dissolve"):
+            extra = {}
+            room_id = rest.strip()
+            if room_id:
+                extra["roomId"] = room_id
+            return await self._room_action(sender_id, is_admin, "dissolve", extra)
+
         if sub in ("创建房间", "建房", "create"):
             denied = self._check_admin(is_admin, "创建房间")
             if denied:
@@ -238,6 +336,112 @@ class PhiraMpPlugin(Star):
             return f"已向 {users} 位在线玩家发送公告"
 
         return f"未知子指令：{sub}，发送 /p帮助 查看可用指令"
+
+    async def _room_action(
+        self, user_id: str, is_admin: bool, action: str, extra: dict | None = None
+    ) -> str:
+        payload = {
+            "platform": "qq",
+            "userId": user_id,
+            "action": action,
+            "admin": is_admin,
+        }
+        if extra:
+            payload.update(extra)
+        response = await self._request("POST", "/api/room/action", payload)
+        if not response.get("ok"):
+            return self._error_text(response)
+        return self._format_room_action(action, response.get("data") or {})
+
+    @staticmethod
+    def _target_payload(text: str) -> dict | None:
+        target = text.strip()
+        if not target:
+            return None
+        if target.isdigit():
+            return {"targetId": int(target)}
+        return {"targetName": target}
+
+    @staticmethod
+    def _format_room_action(action: str, data: dict) -> str:
+        room_id = data.get("id") or "?"
+        if action == "info":
+            return PhiraMpPlugin._format_room_detail(data.get("room") or {})
+
+        if action == "lock":
+            return f"已{'锁定' if data.get('locked') else '解锁'}房间 {room_id}"
+
+        if action == "cycle":
+            return f"已{'开启' if data.get('cycle') else '关闭'}房间 {room_id} 的轮换模式"
+
+        if action == "select-chart":
+            chart = data.get("chart") or {}
+            return f"已选择谱面 {chart.get('name', '?')}（ID {chart.get('id', '?')}）"
+
+        if action == "start":
+            return "已开始游戏，等待所有玩家准备"
+
+        if action == "ready":
+            return "已准备"
+
+        if action == "cancel-ready":
+            return "已取消准备"
+
+        if action == "abort":
+            return "已中止本局游戏"
+
+        if action == "kick":
+            target = data.get("target") or {}
+            text = f"已把 {target.get('name', '?')}（ID {target.get('id', '?')}）移出房间"
+            if data.get("roomDeleted"):
+                text += "\n房间已无玩家，已自动解散"
+            return text
+
+        if action == "set-host":
+            host = data.get("host") or {}
+            return f"已把房主转让给 {host.get('name', '?')}（ID {host.get('id', '?')}）"
+
+        if action == "dissolve":
+            return f"已解散房间 {room_id}，房间内 {data.get('members', 0)} 人已退出"
+
+        return "操作成功"
+
+    @staticmethod
+    def _format_room_detail(room: dict) -> str:
+        if not room:
+            return "你当前不在任何房间"
+        state = {
+            "SelectChart": "未开始",
+            "WaitForReady": "准备中",
+            "Playing": "游戏中",
+        }.get(room.get("state"), "未知")
+        host = room.get("host") or {}
+        chart = room.get("chart") or {}
+        chart_text = f"{chart.get('name', '未选谱')}"
+        if chart:
+            chart_text += f"（ID {chart.get('id', '?')}）"
+        lines = [
+            f"房间 {room.get('id', '?')} · {room.get('users', 0)}/{room.get('maxUsers', 8)} 人"
+            f"（旁观 {room.get('monitors', 0)}）· {state}",
+            f"房主：{host.get('name', '无')}（ID {host.get('id', '?')}）",
+            f"谱面：{chart_text}",
+            f"锁定：{'是' if room.get('locked') else '否'} · "
+            f"轮换：{'开' if room.get('cycle') else '关'}",
+        ]
+        members = room.get("members") or []
+        if members:
+            lines.append("成员：")
+            for index, member in enumerate(members, 1):
+                role = "旁观" if member.get("monitor") else "玩家"
+                if not member.get("online"):
+                    role += "·掉线"
+                if host and member.get("id") == host.get("id"):
+                    role += "·房主"
+                lines.append(
+                    f"  {index}. {member.get('name', '?')}"
+                    f"（ID {member.get('id', '?')}）· {role}"
+                )
+        return "\n".join(lines)
 
     async def _login(self, user_id: str) -> str:
         response = await self._fetch_binding(user_id)
